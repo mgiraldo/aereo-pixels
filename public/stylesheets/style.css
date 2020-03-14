@@ -1,0 +1,38 @@
+body {
+  padding: 1rem;
+  font: 14px 'Lucida Grande', Helvetica, Arial, sans-serif;
+}
+
+a {
+  color: #00b7ff;
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+h1 {
+  margin: 0;
+}
+
+.bucket-list {
+  padding: 0;
+}
+
+.bucket {
+  display: flex;
+  margin-bottom: 0.5rem;
+}
+
+.bucket .button {
+  margin-right: 1rem;
+  padding: 0.25rem 0.5rem;
+  text-align: center;
+  width: 6rem;
+}
+
+.import,
+.done {
+  display: inline-block;
+  width: 7rem;
+}

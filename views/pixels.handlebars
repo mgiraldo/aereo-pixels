@@ -1,0 +1,25 @@
+<h1>Generate bucket pixels</h1>
+<a href="atlas">Atlas</a>
+<ul class="bucket-list">
+  {{#each data.buckets}}
+  <li class="bucket">
+    <form action="/image/pixels" method="POST">
+      <input type="hidden" value="{{this.key}}" name="bucket">
+      <button class="button">Generate</button>
+      {{#if this.db}}
+      <span class="done">Done!</span>
+      {{else}}
+      <a class="import" href="?db={{this.key}}">Import to DB</a>
+      {{/if}}
+      {{this.key}} ({{this.ids.length}})
+      {{#if this.pixels}}
+      <div>
+        {{#each this.pixels}}
+        <img src="/pixels/{{this}}" />
+        {{/each}}
+      </div>
+      {{/if}}
+    </form>
+  </li>
+  {{/each}}
+</ul>

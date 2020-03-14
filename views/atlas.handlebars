@@ -1,0 +1,19 @@
+<h1>Generate bucket atlases</h1>
+<a href="pixels">Pixels</a>
+<ul class="bucket-list">
+  {{#each data.buckets}}
+  <li class="bucket">
+    <form action="/image/atlas" method="POST">
+      <input type="hidden" value="{{this.key}}" name="bucket">
+      <button class="button">Generate</button> {{this.key}} ({{this.ids.length}})
+      {{#if this.atlas.length}}
+      <div>
+        {{#each this.atlas}}
+        <a href="/atlas/{{this}}">{{this}}</a>
+        {{/each}}
+      </div>
+      {{/if}}
+    </form>
+  </li>
+  {{/each}}
+</ul>
