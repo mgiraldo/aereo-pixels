@@ -36,3 +36,9 @@ h1 {
   display: inline-block;
   width: 7rem;
 }
+
+.pixels {
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  min-height: 4rem;
+}

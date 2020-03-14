@@ -9,14 +9,12 @@
       {{#if this.db}}
       <span class="done">Done!</span>
       {{else}}
-      <a class="import" href="?db={{this.key}}">Import to DB</a>
+      <!-- <a class="import" href="?db={{this.key}}">Import to DB</a> -->
       {{/if}}
       {{this.key}} ({{this.ids.length}})
       {{#if this.pixels}}
       <div>
-        {{#each this.pixels}}
-        <img src="/pixels/{{this}}" />
-        {{/each}}
+        <img src="/pixels/{{this.pixels}}" class="pixels" />
       </div>
       {{/if}}
     </form>

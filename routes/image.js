@@ -2,7 +2,7 @@ var express = require('express')
 var router = express.Router()
 
 const fs = require('fs')
-const { exec } = require('child_process')
+const { exec, execSync } = require('child_process')
 
 const { Client } = require('pg')
 const client = new Client({
@@ -11,6 +11,8 @@ const client = new Client({
   database: 'nsw_data'
 })
 client.connect()
+
+var sharp = require('sharp')
 
 const TILE_SIZE = 32
 const MAX_QUERY_LIMIT = 4096
@@ -41,18 +43,120 @@ const asyncForEach = async (array, callback) => {
   }
 }
 
-const makeIdQuery = async (ids) => {
+const makeIdQuery = async (ids, columns) => {
   const dollars = ids.map((_, index) => '($' + (index + 1) + ')').join(',')
   const data = await client.query(
-    'SELECT id, filename FROM file_mga INNER JOIN ( VALUES ' +
-      dollars +
-      ' ) vals(v) ON (id = v)',
+    `SELECT ${columns.join(
+      ','
+    )} FROM file_mga INNER JOIN ( VALUES ${dollars} ) vals(v) ON (id = v)`,
     ids
   )
   return data
 }
 
-const createPixelsForBucket = async (bucket) => {}
+const createPixelsForBucket = async (bucket) => {
+  const fullSide = Math.ceil(Math.sqrt(bucket.ids.length))
+  const queryLimit = fullSide // query one row at a time
+  const ids = [...bucket.ids]
+  const tileSize = 1
+
+  const groups = []
+  while (ids.length) {
+    groups.push(ids.splice(0, queryLimit))
+  }
+
+  await asyncForEach(groups, async (ids, gidx) => {
+    // for each group of ids
+    const colorData = await makeIdQuery(ids, [
+      'id',
+      'palette_colors',
+      'palette_text'
+    ])
+
+    const rows = colorData.rows
+    const pixels = []
+
+    await asyncForEach(ids, async (id, index) => {
+      const result = rows.find((row) => row.id === id)
+      let input
+      if (result && result.palette_colors) {
+        // put the pixels
+        input = result.palette_colors.split(':')[0] // only the first color for now
+      } else {
+        // blank pixels
+        input = '#000'
+      }
+      pixels.push({
+        color: input,
+        top: Math.floor(index / fullSide) * tileSize,
+        left: (index % fullSide) * tileSize
+      })
+    })
+
+    const path =
+      BASE_PATH + '/server/public/pixels/' + bucket.key + '_' + gidx + '.png'
+
+    const rects = pixels.map(
+      (p) =>
+        `-fill "${p.color}" -draw "rectangle ${p.left},${
+          p.top
+        } %[fx:w-${fullSide - p.left}],%[fx:h-${tileSize - p.top}]"`
+    )
+
+    const cmd = `magick -size ${fullSide}x${tileSize} xc:black ${rects.join(
+      ' '
+    )} ${path}`
+
+    execSync(cmd, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`exec error ${error}`)
+        return
+      }
+    })
+  })
+
+  const path = BASE_PATH + '/server/public/pixels/' + bucket.key + '.png'
+  let cmd
+  if (groups.length > 1) {
+    // combine rows into one image
+    const tiles = groups.map((_, i) => {
+      const path =
+        BASE_PATH + '/server/public/pixels/' + bucket.key + '_' + i + '.png'
+      return `${path} -geometry +0+${i * tileSize} -composite`
+    })
+    cmd = `magick -size ${fullSide}x${groups.length} xc:black ${tiles.join(
+      ' '
+    )} ${path}`
+  } else {
+    // there is only one. just rename.
+    const zerothPath =
+      BASE_PATH + '/server/public/pixels/' + bucket.key + '_0.png'
+    cmd = `mv ${zerothPath} ${path}`
+  }
+
+  execSync(cmd, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`exec error ${error}`)
+      return
+    }
+  })
+
+  // delete leftovers
+  try {
+    const rmPath = BASE_PATH + '/server/public/pixels/' + bucket.key + '_*.png'
+    cmd = `rm ${rmPath}`
+    execSync(cmd, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`exec error ${error}`)
+        return
+      }
+    })
+  } catch {
+    console.log('nothing to delete')
+  }
+
+  return bucket.key + '.png'
+}
 
 const importColorsForBucket = async (bucket) => {
   const queryLimit = MAX_QUERY_LIMIT // ids at a time
@@ -121,11 +225,11 @@ const createAtlasForBucket = async (bucket) => {
   const atlas = []
 
   await asyncForEach(groups, async (group) => {
-    const data = await makeIdQuery(group)
+    const data = await makeIdQuery(group, ['id', 'filename'])
 
     const rows = data.rows
     const paths = []
-    const count = rows.length
+    const count = group.length
     const side = Math.ceil(Math.sqrt(count))
 
     group.forEach((id, index) => {
@@ -134,7 +238,12 @@ const createAtlasForBucket = async (bucket) => {
       if (result) {
         const path = relativePathForFile(result.filename)
         if (path.indexOf(' ') === -1 && path.indexOf('(') === -1) {
-          input = path
+          try {
+            fs.readFileSync(absolutePathForFile(result.filename))
+            input = path
+          } catch {
+            input = './server/public/images/blank.png'
+          }
         } else {
           input = './server/public/images/blank.png'
         }
@@ -153,7 +262,6 @@ const createAtlasForBucket = async (bucket) => {
       .join(
         ' '
       )}  -geometry +0+0 -background none -tile ${side}x${side} ./server/public/atlas/${atlasName}`
-    // console.log(cmd)
     await exec(cmd, (error, stdout, stderr) => {
       if (error) {
         console.error(`exec error ${error}`)
