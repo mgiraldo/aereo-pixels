@@ -330,6 +330,17 @@ router.all('/pixels', async (req, res, next) => {
   res.render('pixels', { data: { bucket, buckets } })
 })
 
+router.get('/data/:id', async (req, res, next) => {
+  const data = await client.query('SELECT * FROM file_mga WHERE id = $1', [
+    req.params.id
+  ])
+
+  const row = data.rows[0]
+
+  res.setHeader('Content-Type', 'application/json')
+  res.end(JSON.stringify(row))
+})
+
 router.get('/:number/:filename', async (req, res, next) => {
   const options = {
     dotfiles: 'deny',
