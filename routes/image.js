@@ -14,6 +14,7 @@ client.connect()
 
 const TILE_SIZE = 32
 const MAX_QUERY_LIMIT = 4096
+const MAX_ATLAS_SIZE = 65536
 const BASE_PATH = '/Users/mga/Documents/projects/nsw'
 const MINI_FOLDER = '32_32'
 const BIG_FOLDER = 'files'
@@ -209,8 +210,11 @@ const importColorsForBucket = async (bucket) => {
 }
 
 const createAtlasForBucket = async (bucket) => {
-  const queryLimit = MAX_QUERY_LIMIT // ids at a time
   const ids = [...bucket.ids]
+  const fullSide = Math.ceil(
+    Math.sqrt(ids.length > MAX_QUERY_LIMIT ? MAX_ATLAS_SIZE : MAX_QUERY_LIMIT)
+  )
+  const queryLimit = fullSide // one row at a time
   const key = bucket.key
 
   const groups = []
@@ -219,15 +223,14 @@ const createAtlasForBucket = async (bucket) => {
   }
 
   const w = TILE_SIZE
-  let groupIdx = 0
   const atlas = []
+  const atlasRows = []
 
-  await asyncForEach(groups, async (group) => {
+  await asyncForEach(groups, async (group, idx) => {
     const data = await makeIdQuery(group, ['id', 'filename'])
 
     const rows = data.rows
     const paths = []
-    const side = Math.ceil(Math.sqrt(queryLimit)) // always 2048x2048
 
     group.forEach((id, index) => {
       const result = rows.find((row) => row.id === id)
@@ -249,25 +252,70 @@ const createAtlasForBucket = async (bucket) => {
       }
       paths.push({
         input: `"${input}"`,
-        top: Math.floor(index / side) * w,
-        left: (index % side) * w
+        top: Math.floor(index / fullSide) * w,
+        left: (index % fullSide) * w
       })
     })
-    const atlasName = `${key}_${groupIdx}.jpg`
+
+    const atlasName = `${key}_row_${idx}.jpg`
+    atlasRows.push(atlasName)
     const cmd = `cd ${BASE_PATH}; montage ${paths
       .map((p) => p.input)
       .join(
         ' '
-      )}  -geometry ${w}x${w}+0+0 -background none -tile ${side}x${side} ./server/public/atlas/${atlasName}`
-    await exec(cmd, (error, stdout, stderr) => {
+      )}  -geometry ${w}x${w}+0+0 -background none -tile ${fullSide}x ./server/public/atlas/${atlasName}`
+
+    execSync(cmd, (error, stdout, stderr) => {
       if (error) {
         console.error(`exec error ${error}`)
         return
       }
     })
-    atlas.push(atlasName)
-    groupIdx++
   })
+
+  const atlasGroups = []
+  while (atlasRows.length) {
+    atlasGroups.push(atlasRows.splice(0, queryLimit))
+  }
+
+  atlasGroups.forEach((group, index) => {
+    const name = key + '_' + index + '.jpg'
+    atlas.push(name)
+    const path = BASE_PATH + '/server/public/atlas/' + name
+    let cmd
+    // combine rows into one image
+    const tiles = group.map((_, i) => {
+      const path =
+        BASE_PATH + '/server/public/atlas/' + key + '_row_' + i + '.jpg'
+      return `${path} -geometry +0+${i * w} -composite`
+    })
+    cmd = `magick -size ${fullSide * w}x${fullSide * w} xc:black ${tiles.join(
+      ' '
+    )} ${path}`
+
+    execSync(cmd, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`exec error ${error}`)
+        return
+      }
+    })
+  })
+
+  // delete leftovers
+  try {
+    const rmPath =
+      BASE_PATH + '/server/public/atlas/' + bucket.key + '_row_*.jpg'
+    cmd = `rm ${rmPath}`
+    execSync(cmd, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`exec error ${error}`)
+        return
+      }
+    })
+  } catch {
+    console.log('nothing to delete')
+  }
+
   return atlas
 }
 
