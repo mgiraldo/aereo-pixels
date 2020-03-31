@@ -12,8 +12,6 @@ const client = new Client({
 })
 client.connect()
 
-var sharp = require('sharp')
-
 const TILE_SIZE = 32
 const MAX_QUERY_LIMIT = 4096
 const BASE_PATH = '/Users/mga/Documents/projects/nsw'
@@ -229,8 +227,7 @@ const createAtlasForBucket = async (bucket) => {
 
     const rows = data.rows
     const paths = []
-    const count = group.length
-    const side = Math.ceil(Math.sqrt(count))
+    const side = Math.ceil(Math.sqrt(queryLimit)) // always 2048x2048
 
     group.forEach((id, index) => {
       const result = rows.find((row) => row.id === id)
@@ -261,7 +258,7 @@ const createAtlasForBucket = async (bucket) => {
       .map((p) => p.input)
       .join(
         ' '
-      )}  -geometry +0+0 -background none -tile ${side}x${side} ./server/public/atlas/${atlasName}`
+      )}  -geometry ${w}x${w}+0+0 -background none -tile ${side}x${side} ./server/public/atlas/${atlasName}`
     await exec(cmd, (error, stdout, stderr) => {
       if (error) {
         console.error(`exec error ${error}`)
