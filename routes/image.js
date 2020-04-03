@@ -286,7 +286,12 @@ const createAtlasForBucket = async (bucket) => {
     // combine rows into one image
     const tiles = group.map((_, i) => {
       const path =
-        BASE_PATH + '/server/public/atlas/' + key + '_row_' + i + '.jpg'
+        BASE_PATH +
+        '/server/public/atlas/' +
+        key +
+        '_row_' +
+        (index * queryLimit + i) +
+        '.jpg'
       return `${path} -geometry +0+${i * w} -composite`
     })
     cmd = `magick -size ${fullSide * w}x${fullSide * w} xc:black ${tiles.join(
@@ -322,13 +327,11 @@ const createAtlasForBucket = async (bucket) => {
 router.all('/atlas', async (req, res, next) => {
   const bucket = req.body.bucket
 
-  const data = await client.query('SELECT bucket, file_ids FROM bucket_ids')
+  const data = await client.query(
+    "SELECT bucket, file_ids, array_length(string_to_array(file_ids, ','), 1) as count FROM bucket_ids ORDER BY count DESC"
+  )
 
   let buckets = []
-
-  data.rows.sort(
-    (a, b) => b.file_ids.split(',').length - a.file_ids.split(',').length
-  )
 
   data.rows.forEach((row) => {
     key = row.bucket
