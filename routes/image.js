@@ -8,7 +8,7 @@ const { Client } = require('pg')
 const client = new Client({
   // user: 'dbuser',
   // host: 'database.server.com',
-  database: 'nsw_data'
+  database: 'nsw_data',
 })
 client.connect()
 
@@ -69,7 +69,7 @@ const createPixelsForBucket = async (bucket) => {
     const colorData = await makeIdQuery(ids, [
       'id',
       'palette_colors',
-      'palette_text'
+      'palette_text',
     ])
 
     const rows = colorData.rows
@@ -88,7 +88,7 @@ const createPixelsForBucket = async (bucket) => {
       pixels.push({
         color: input,
         top: Math.floor(index / fullSide) * tileSize,
-        left: (index % fullSide) * tileSize
+        left: (index % fullSide) * tileSize,
       })
     })
 
@@ -97,9 +97,9 @@ const createPixelsForBucket = async (bucket) => {
 
     const rects = pixels.map(
       (p) =>
-        `-fill "${p.color}" -draw "rectangle ${p.left},${
-          p.top
-        } %[fx:w-${fullSide - p.left}],%[fx:h-${tileSize - p.top}]"`
+        `-fill "${p.color}" -draw "rectangle ${p.left},${p.top} %[fx:w-${
+          fullSide - p.left
+        }],%[fx:h-${tileSize - p.top}]"`
     )
 
     const cmd = `magick -size ${fullSide}x${tileSize} xc:black ${rects.join(
@@ -253,7 +253,7 @@ const createAtlasForBucket = async (bucket) => {
       paths.push({
         input: `"${input}"`,
         top: Math.floor(index / fullSide) * w,
-        left: (index % fullSide) * w
+        left: (index % fullSide) * w,
       })
     })
 
@@ -351,13 +351,11 @@ router.all('/pixels', async (req, res, next) => {
   const bucket = req.body.bucket
   const db = req.query.db
 
-  const data = await client.query('SELECT bucket, file_ids FROM bucket_ids')
+  const data = await client.query(
+    "SELECT bucket, file_ids, array_length(string_to_array(file_ids, ','), 1) as count FROM bucket_ids ORDER BY count DESC"
+  )
 
   let buckets = []
-
-  data.rows.sort(
-    (a, b) => b.file_ids.split(',').length - a.file_ids.split(',').length
-  )
 
   data.rows.forEach((row) => {
     key = row.bucket
@@ -380,7 +378,7 @@ router.all('/pixels', async (req, res, next) => {
 
 router.get('/data/:id', async (req, res, next) => {
   const data = await client.query('SELECT * FROM file_mga WHERE id = $1', [
-    req.params.id
+    req.params.id,
   ])
 
   const row = data.rows[0]
@@ -394,12 +392,12 @@ router.get('/:number/:filename', async (req, res, next) => {
     dotfiles: 'deny',
     headers: {
       'x-timestamp': Date.now(),
-      'x-sent': true
-    }
+      'x-sent': true,
+    },
   }
 
   const path = `${BASE_PATH}/${BIG_FOLDER}/${req.params.number}/${req.params.filename}`
-  res.sendFile(path, options, function(err) {
+  res.sendFile(path, options, function (err) {
     if (err) {
       next(err)
     } else {
@@ -413,8 +411,8 @@ router.get('/:id', async (req, res, next) => {
     dotfiles: 'deny',
     headers: {
       'x-timestamp': Date.now(),
-      'x-sent': true
-    }
+      'x-sent': true,
+    },
   }
 
   const data = await client.query(
@@ -426,7 +424,7 @@ router.get('/:id', async (req, res, next) => {
   const filename = row.filename
 
   const path = absolutePathForFile(filename, req.query.s)
-  res.sendFile(path, options, function(err) {
+  res.sendFile(path, options, function (err) {
     if (err) {
       next(err)
     } else {
